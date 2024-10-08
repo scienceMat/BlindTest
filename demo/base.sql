@@ -15,7 +15,7 @@ CREATE TABLE music (
 );
 
 -- Création de la table des sessions
-CREATE TABLE sessions (
+CREATE TABLE session (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     current_music_index INT DEFAULT 0,

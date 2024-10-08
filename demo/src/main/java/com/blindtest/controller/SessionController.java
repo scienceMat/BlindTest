@@ -1,3 +1,4 @@
+// src/main/java/com/blindtest/controller/SessionController.java
 package com.blindtest.controller;
 
 import com.blindtest.dto.MusicDTO;
