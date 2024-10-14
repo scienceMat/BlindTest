@@ -6,8 +6,13 @@ import com.blindtest.dto.MusicDTO;
 import com.blindtest.model.User;
 import com.blindtest.model.Session;
 import com.blindtest.model.Music;
-import java.util.Map;
 
+import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.Set;
+import java.util.List;
+import java.util.ArrayList;
+import java.util.HashSet;
 
 
 import java.util.stream.Collectors;
@@ -18,7 +23,6 @@ public class Mapper {
         UserDTO dto = new UserDTO();
         dto.setId(user.getId());
         dto.setUserName(user.getName());
-        dto.setPassword(user.getPassword());
         dto.setIsAdmin(user.isAdmin());
         dto.setScore(user.getScore());
         dto.setReady(user.isReady());
@@ -93,24 +97,39 @@ public class Mapper {
         return sessionDTO;
     }
 
-    public static Session toSession(SessionDTO dto) {
+     public static Session toSession(SessionDTO dto) {
         Session session = new Session();
         session.setId(dto.getId());
         session.setName(dto.getName());
         session.setAdmin(new User(dto.getAdminId()));
-        session.setUsers(dto.getUsers().stream().map(Mapper::toUser).collect(Collectors.toList()));
-        session.setMusics(dto.getMusicList() != null ? dto.getMusicList().stream().map(Mapper::toMusic).collect(Collectors.toList()) : null);
+        
+        // Convert List<User> to Set<User>
+        List<User> userSet = new ArrayList<>(dto.getUsers().stream().map(Mapper::toUser).collect(Collectors.toList()));
+        session.setUsers(userSet);
+
+        // Convert List<Music> to appropriate collection type
+        List<Music> musicList = (dto.getMusicList() != null) 
+            ? dto.getMusicList().stream().map(Mapper::toMusic).collect(Collectors.toList())
+            : null;
+        session.setMusics(musicList);
+
         session.setCurrentMusicIndex(dto.getCurrentMusicIndex());
         session.setStatus(dto.getStatus());
         session.setStartTime(dto.getStartTime());
         session.setEndTime(dto.getEndTime());
         session.setQuestionStartTime(dto.getQuestionStartTime());
-        session.setScores(dto.getScores() != null ? dto.getScores().entrySet().stream()
-            .collect(Collectors.toMap(entry -> {
-                User user = new User();
-                user.setId(entry.getKey());
-                return user;
-            }, Map.Entry::getValue)) : null);
+
+        // Convert Map<Long, Integer> scores to appropriate Map<User, Integer>
+        Map<User, Integer> scores = (dto.getScores() != null) 
+            ? dto.getScores().entrySet().stream()
+                .collect(Collectors.toMap(entry -> {
+                    User user = new User();
+                    user.setId(entry.getKey());
+                    return user;
+                }, Map.Entry::getValue))
+            : null;
+        session.setScores(scores);
+
         return session;
     }
 }

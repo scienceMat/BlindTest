@@ -25,6 +25,6 @@ public class Music {
     @Column(nullable = false)
     private String image;
 
-    @ManyToMany(mappedBy = "musicList")
+    @ManyToMany(mappedBy = "musicList", cascade = {CascadeType.PERSIST, CascadeType.MERGE, CascadeType.REMOVE})
     private Set<Session> sessions = new HashSet<>();
 }

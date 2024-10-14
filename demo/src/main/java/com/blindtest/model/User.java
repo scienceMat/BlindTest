@@ -2,8 +2,11 @@ package com.blindtest.model;
 
 import jakarta.persistence.*;
 import lombok.Data;
+
 import java.time.LocalDateTime;
-import java.util.HashSet;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 @Entity
@@ -26,11 +29,11 @@ public class User {
 
     private boolean ready;
 
-    @ManyToMany(mappedBy = "users")
-    private Set<Session> sessions = new HashSet<>();
+    @ManyToMany(mappedBy = "users", cascade = {CascadeType.PERSIST, CascadeType.MERGE})
+    private List<Session> sessions = new ArrayList<>();  // Utilisation de List
 
-    @OneToMany(mappedBy = "user")
-    private Set<Answer> answers = new HashSet<>();
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Set<Answer> answers;
 
     // Constructeur avec id
     public User(Long id) {
@@ -55,4 +58,19 @@ public class User {
     public void setReady(boolean ready) {
         this.ready = ready;
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        User user = (User) o;
+        return Objects.equals(id, user.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id);
+    }
+
+    
 }

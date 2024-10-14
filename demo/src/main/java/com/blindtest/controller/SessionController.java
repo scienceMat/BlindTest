@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.web.bind.annotation.*;
+import java.util.Optional;
 
 import java.util.List;
 import java.util.Map;
@@ -30,6 +31,12 @@ public class SessionController {
         return sessionService.getAllSessions();
     }
 
+    @GetMapping("/user/{userId}")
+    public ResponseEntity<SessionDTO> getSessionByUserId(@PathVariable Long userId) {
+        Optional<SessionDTO> sessionOpt = sessionService.getSessionByUserId(userId);
+        return sessionOpt.map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
     @PostMapping
     public SessionDTO createSession(@RequestBody SessionDTO sessionDTO) {
         return sessionService.createSession(sessionDTO.getName(), sessionDTO.getAdminId());
@@ -38,6 +45,23 @@ public class SessionController {
     @PostMapping("/{sessionId}/join")
     public SessionDTO joinSession(@PathVariable Long sessionId, @RequestBody UserDTO userDTO) {
         return sessionService.joinSession(sessionId, userDTO.getId());
+    }
+
+    @PostMapping("/{sessionId}/leave")
+    public SessionDTO leaveSession(@PathVariable Long sessionId, @RequestBody UserDTO userDTO) {
+        return sessionService.leaveSession(sessionId, userDTO.getId());
+    }
+
+    @PostMapping("/{sessionId}/nextTrack")
+    public ResponseEntity<Void> nextTrack(@PathVariable Long sessionId) {
+        sessionService.nextTrack(sessionId);
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/{sessionId}/previousTrack")
+    public ResponseEntity<Void> previousTrack(@PathVariable Long sessionId) {
+        sessionService.previousTrack(sessionId);
+        return ResponseEntity.ok().build();
     }
 
     @GetMapping("/{sessionId}/playlist")
@@ -58,6 +82,13 @@ public class SessionController {
     @PostMapping("/{sessionId}/start")
     public SessionDTO startSession(@PathVariable Long sessionId) {
         SessionDTO sessionDTO = sessionService.startSession(sessionId);
+        messagingTemplate.convertAndSend("/topic/session/" + sessionId, sessionDTO);
+        return sessionDTO;
+    }
+
+    @PostMapping("/{sessionId}/stop")
+    public SessionDTO stopSession(@PathVariable Long sessionId) {
+        SessionDTO sessionDTO = sessionService.stopSession(sessionId);
         messagingTemplate.convertAndSend("/topic/session/" + sessionId, sessionDTO);
         return sessionDTO;
     }
