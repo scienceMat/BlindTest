@@ -53,6 +53,12 @@ public class SessionService {
     }
 
     @Transactional
+    public Session getSessionById(Long sessionId) {
+    return sessionRepository.findById(sessionId)
+        .orElseThrow(() -> new RuntimeException("Session not found"));
+}
+
+    @Transactional
     public SessionDTO createSession(String name, Long adminId) {
         User admin = userRepository.findById(adminId).orElseThrow(() -> new RuntimeException("Admin not found"));
         
@@ -159,71 +165,179 @@ public class SessionService {
     }
 
     @Transactional
-    public SessionDTO submitAnswer(Long sessionId, Long userId, String title, String artist) {
-        Session session = sessionRepository.findById(sessionId).orElseThrow(() -> new RuntimeException("Session not found"));
-        User user = userRepository.findById(userId).orElseThrow(() -> new RuntimeException("User not found"));
+    public List<UserDTO> getSessionScores(Long sessionId) {
+    Session session = sessionRepository.findById(sessionId)
+        .orElseThrow(() -> new RuntimeException("Session not found"));
 
-        Music currentMusic = session.getCurrentMusic();
-        if (currentMusic == null) {
-            throw new RuntimeException("No music is currently playing in this session");
-        }
+    return session.getUsers().stream()
+        .map(user -> {
+            UserDTO userDTO = new UserDTO();
+            userDTO.setId(user.getId());
+            userDTO.setUserName(user.getName());
+            userDTO.setScore(session.getScores().get(user)); // Récupérer le score de l'utilisateur dans la session
+            return userDTO;
+        })
+        .collect(Collectors.toList());
+}
 
-        if (answerRepository.existsByUserAndSessionAndMusic(user, session, currentMusic)) {
-            throw new RuntimeException("User has already answered this round");
-        }
 
-        boolean isTitleCorrect = isSimilar(title, currentMusic.getTitle());
-        boolean isArtistCorrect = isSimilar(artist, currentMusic.getArtist());
+@Transactional
+public synchronized SessionDTO submitAnswer(Long sessionId, Long userId, String title, String artist) {
+    Session session = sessionRepository.findById(sessionId)
+        .orElseThrow(() -> new RuntimeException("Session not found"));
+    User user = userRepository.findById(userId)
+        .orElseThrow(() -> new RuntimeException("User not found"));
 
-        int score = 0;
-        if (isTitleCorrect) score += 5;
-        if (isArtistCorrect) score += 5;
-
-        session.getScores().put(user, session.getScores().getOrDefault(user, 0) + score);
-
-        Answer answer = new Answer();
-        answer.setUser(user);
-        answer.setSession(session);
-        answer.setMusic(currentMusic);
-        answer.setTitle(title);
-        answer.setArtist(artist);
-        answer.setTitleCorrect(isTitleCorrect);
-        answer.setArtistCorrect(isArtistCorrect);
-        answer.setAnswerTime(LocalDateTime.now());
-
-        answerRepository.save(answer);
-        sessionRepository.save(session);
-
-        messagingTemplate.convertAndSend("/topic/session/" + sessionId, "UPDATE_SCORE");
-        checkAndProceedToNextRound(session);
-
-        return Mapper.toSessionDTO(session);
+    Music currentMusic = session.getCurrentMusic();
+    if (currentMusic == null) {
+        throw new RuntimeException("No music is currently playing in this session");
     }
 
-    @Transactional
-    private void checkAndProceedToNextRound(Session session) {
-        int totalUsers = session.getUsers().size();
-        int answeredUsers = answerRepository.countBySessionAndMusic(session, session.getCurrentMusic());
+    if (answerRepository.existsByUserAndSessionAndMusic(user, session, currentMusic)) {
+        throw new RuntimeException("User has already answered this round");
+    }
 
-        if (answeredUsers == totalUsers) {
-            messagingTemplate.convertAndSend("/topic/session/" + session.getId(), "END_OF_ROUND");
+    // Vérifie si la réponse est correcte
+    boolean isTitleCorrect = isSimilar(title, currentMusic.getTitle());
+    boolean isArtistCorrect = isSimilar(artist, currentMusic.getArtist());
 
-            int nextIndex = session.getCurrentMusicIndex() + 1;
-            if (nextIndex < session.getMusics().size()) {
+    // Calcul du score pour la réponse
+    int score = 0;
+    if (isTitleCorrect) score += 5;
+    if (isArtistCorrect) score += 5;
+
+    // Mise à jour du score du joueur dans la session
+    session.getScores().put(user, session.getScores().getOrDefault(user, 0) + score);
+
+    // Sauvegarder la réponse du joueur
+    Answer answer = new Answer();
+    answer.setUser(user);
+    answer.setSession(session);
+    answer.setMusic(currentMusic);
+    answer.setTitle(title);
+    answer.setArtist(artist);
+    answer.setTitleCorrect(isTitleCorrect);
+    answer.setArtistCorrect(isArtistCorrect);
+    answer.setAnswerTime(LocalDateTime.now());
+
+    answerRepository.save(answer);
+    sessionRepository.save(session);
+
+    // Vérifier si tous les joueurs ont répondu pour terminer le round
+    if (checkIfAllPlayersAnswered(session)) {
+        // Notifier la fin du round
+        notifyEndOfRound(session);
+        
+        // Pause de la musique
+        pauseMusic(session);
+
+        // Attendre une courte durée avant de passer à la musique suivante
+        try {
+            Thread.sleep(5000); // Pause de 5 secondes pour laisser le temps à l'admin de voir les scores
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
+        // Passer à la musique suivante
+        nextMusic(session);
+    }
+
+    // Retourner la session avec les scores mis à jour
+    return Mapper.toSessionDTO(session);
+}
+
+// Mettre en pause la musique pour tous les utilisateurs
+public void pauseMusic(Session session) {
+    messagingTemplate.convertAndSend("/topic/session/" + session.getId(), "PAUSE_MUSIC");
+}
+
+// Notifier la fin du round à tous les utilisateurs
+public void notifyEndOfRound(Session session) {
+    messagingTemplate.convertAndSend("/topic/session/" + session.getId(), "END_OF_ROUND");
+}
+
+public void nextMusic(Session session) {
+    int nextMusicIndex = session.getCurrentMusicIndex() + 1;
+
+    if (nextMusicIndex < session.getMusicList().size()) {
+        session.setCurrentMusicIndex(nextMusicIndex);
+        sessionRepository.save(session);
+
+        // Notifier les utilisateurs de la nouvelle musique
+        messagingTemplate.convertAndSend("/topic/session/" + session.getId(), "NEXT_MUSIC");
+    } else {
+        // Si c'était la dernière musique, terminer la session
+        messagingTemplate.convertAndSend("/topic/session/" + session.getId(), "SESSION_FINISHED");
+    }
+}
+
+public boolean checkIfAllPlayersAnswered(Session session) {
+    // Récupérer les utilisateurs de la session (sauf l'admin)
+    List<User> nonAdminUsers = session.getUsers().stream()
+        .filter(user -> !user.equals(session.getAdmin()))
+        .toList();
+
+    // Récupérer la musique en cours
+    Music currentMusic = session.getCurrentMusic();
+    if (currentMusic == null) {
+        throw new RuntimeException("No current music found for the session.");
+    }
+
+    // Vérifier si chaque utilisateur a soumis une réponse pour la musique actuelle
+    for (User user : nonAdminUsers) {
+        boolean hasAnswered = session.getAnswers().stream()
+            .anyMatch(answer -> answer.getUser().equals(user) && answer.getMusic().equals(currentMusic));
+        if (!hasAnswered) {
+            return false;  // Si un utilisateur n'a pas répondu, retourner false
+        }
+    }
+
+    // Si tous les utilisateurs ont répondu
+    return true;
+}
+
+
+@Transactional
+private void checkAndProceedToNextRound(Session session) {
+    // Exclure l'admin du total des utilisateurs
+    int totalUsers = (int) session.getUsers().stream()
+            .filter(user -> !user.isAdmin()) // Filtrer les utilisateurs qui ne sont pas admin
+            .count();
+    
+    int answeredUsers = answerRepository.countBySessionAndMusic(session, session.getCurrentMusic());
+
+    // Si tous les joueurs (sauf l'admin) ont répondu
+    if (answeredUsers == totalUsers) {
+        // Envoyer l'événement de fin de round
+        messagingTemplate.convertAndSend("/topic/session/" + session.getId(), "END_OF_ROUND");
+
+        int nextIndex = session.getCurrentMusicIndex() + 1;
+        
+        if (nextIndex < session.getMusics().size()) {
+            // Attendre 5 secondes avant de passer à la musique suivante
+            new Thread(() -> {
+                try {
+                    Thread.sleep(15000); // Pause de 15 secondes
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+
                 session.setCurrentMusicIndex(nextIndex);
                 session.setQuestionStartTime(LocalDateTime.now());
                 sessionRepository.save(session);
 
                 messagingTemplate.convertAndSend("/topic/session/" + session.getId(), "NEXT_MUSIC");
-            } else {
-                session.setStatus("finished");
-                session.setEndTime(LocalDateTime.now());
-                sessionRepository.save(session);
+            }).start();
+        } else {
+            // Si tous les morceaux ont été joués, marquer la session comme terminée
+            session.setStatus("finished");
+            session.setEndTime(LocalDateTime.now());
+            sessionRepository.save(session);
 
-                messagingTemplate.convertAndSend("/topic/session/" + session.getId(), "SESSION_FINISHED");
-            }
+            messagingTemplate.convertAndSend("/topic/session/" + session.getId(), "SESSION_FINISHED");
         }
     }
+}
 
     @Transactional
     public void updateCurrentMusicIndex(Long sessionId, int index) {
@@ -294,8 +408,6 @@ public class SessionService {
         List<User> users = userRepository.findUsersBySessionId(sessionId);
         users.sort(Comparator.comparing(user -> session.getScores().getOrDefault(user, 0), Comparator.reverseOrder()));
 
-        messagingTemplate.convertAndSend("/topic/session/" + sessionId, users);
-
         try {
             Thread.sleep(5000);
         } catch (InterruptedException e) {
@@ -328,7 +440,6 @@ public class SessionService {
     @Transactional
     private void sendCountdownEvent(Long sessionId, int countdownTime) {
         for (int i = countdownTime; i >= 0; i--) {
-            messagingTemplate.convertAndSend("/topic/session/" + sessionId, "COUNTDOWN_" + i);
             try {
                 Thread.sleep(1000); // Wait for 1 second before sending the next countdown event
             } catch (InterruptedException e) {

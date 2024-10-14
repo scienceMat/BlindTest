@@ -6,6 +6,7 @@ import com.blindtest.dto.PlaylistDTO;
 import com.blindtest.dto.SessionDTO;
 import com.blindtest.dto.UserDTO;
 import com.blindtest.model.AnswerRequest;
+import com.blindtest.model.Session;
 import com.blindtest.service.SessionService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -29,6 +30,11 @@ public class SessionController {
     @GetMapping
     public List<SessionDTO> getAllSessions() {
         return sessionService.getAllSessions();
+    }
+
+    @GetMapping("/{sessionId}/scores")
+    public List<UserDTO> getSessionScores(@PathVariable Long sessionId) {
+        return sessionService.getSessionScores(sessionId);
     }
 
     @GetMapping("/user/{userId}")
@@ -79,24 +85,24 @@ public class SessionController {
         return sessionService.submitAnswer(sessionId, answerRequest.getUserId(), answerRequest.getTitle(), answerRequest.getArtist());
     }
 
+    @GetMapping("/{sessionId}/current-music-index")
+    public ResponseEntity<Integer> getCurrentMusicIndex(@PathVariable Long sessionId) {
+        Session session = sessionService.getSessionById(sessionId);
+    if (session == null) {
+        return ResponseEntity.notFound().build();
+    }
+    return ResponseEntity.ok(session.getCurrentMusicIndex());
+}
+
     @PostMapping("/{sessionId}/start")
     public SessionDTO startSession(@PathVariable Long sessionId) {
         SessionDTO sessionDTO = sessionService.startSession(sessionId);
-        messagingTemplate.convertAndSend("/topic/session/" + sessionId, sessionDTO);
         return sessionDTO;
     }
 
     @PostMapping("/{sessionId}/stop")
     public SessionDTO stopSession(@PathVariable Long sessionId) {
         SessionDTO sessionDTO = sessionService.stopSession(sessionId);
-        messagingTemplate.convertAndSend("/topic/session/" + sessionId, sessionDTO);
-        return sessionDTO;
-    }
-
-    @PostMapping("/{sessionId}/next")
-    public SessionDTO nextQuestion(@PathVariable Long sessionId) {
-        SessionDTO sessionDTO = sessionService.nextQuestion(sessionId);
-        messagingTemplate.convertAndSend("/topic/session/" + sessionId, sessionDTO);
         return sessionDTO;
     }
 
@@ -120,7 +126,6 @@ public class SessionController {
     public ResponseEntity<Void> updateCurrentMusicIndex(@PathVariable Long sessionId, @RequestBody Map<String, Integer> payload) {
         Integer index = payload.get("index");
         sessionService.updateCurrentMusicIndex(sessionId, index);
-        messagingTemplate.convertAndSend("/topic/session/" + sessionId, sessionService.getSession(sessionId));
         return ResponseEntity.ok().build();
     }
 }
