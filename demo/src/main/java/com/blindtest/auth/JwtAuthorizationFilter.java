@@ -41,35 +41,51 @@ public class JwtAuthorizationFilter extends OncePerRequestFilter {
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
-        Map<String, Object> errorDetails = new HashMap<>();
-
         try {
-            String accessToken = jwtService.resolveToken(request);
-            System.out.println("Received token: " + accessToken); // Log pour vérifier le token
-            if (accessToken == null) {
-                filterChain.doFilter(request, response);
-                return;
-            }
+            // Récupérer les claims du JWT s'il y en a un
             Claims claims = jwtService.resolveClaims(request);
-
-            if (claims != null && jwtService.validateClaims(claims)) {
+    
+            // Si on a des claims, on procède normalement
+            if (claims != null) {
                 String email = claims.getSubject();
-                System.out.println("Token valid for user: " + email); // Log pour vérifier si le token est valide
-                UsernamePasswordAuthenticationToken authentication =
-                        new UsernamePasswordAuthenticationToken(email, "", new ArrayList<>());
-                SecurityContextHolder.getContext().setAuthentication(authentication);
+                Boolean isGuest = claims.get("isGuest", Boolean.class);
+                String userName = claims.get("userName", String.class);
+    
+                if (isGuest != null && isGuest && userName != null) {
+                    // Si c'est un guest avec un username valide, on ne vérifie pas le token
+                    System.out.println("Guest user detected: " + userName);
+                    filterChain.doFilter(request, response);
+                    return;
+                } else {
+                    // Traiter l'utilisateur normal avec JWT
+                    System.out.println("Token valid for user: " + email);
+                    UsernamePasswordAuthenticationToken authentication =
+                            new UsernamePasswordAuthenticationToken(email, "", new ArrayList<>());
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
+                }
+            } else {
+                // Pas de token, vérifie si on autorise les guests pour cet endpoint
+                String endpoint = request.getRequestURI();
+                if (isGuestAccessAllowed(endpoint)) {
+                    System.out.println("Access allowed for guest to: " + endpoint);
+                    filterChain.doFilter(request, response);
+                    return;
+                }
             }
-
+    
         } catch (Exception e) {
-            errorDetails.put("message", "Authentication Error");
-            errorDetails.put("details", e.getMessage());
-            System.out.println("Error in token validation: " + e.getMessage()); // Log en cas d'erreur de validation
             response.setStatus(HttpStatus.FORBIDDEN.value());
             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-
-            mapper.writeValue(response.getWriter(), errorDetails);
+            response.getWriter().write("Authentication Error: " + e.getMessage());
             return;
         }
+    
         filterChain.doFilter(request, response);
     }
+
+    private boolean isGuestAccessAllowed(String endpoint) {
+        // Liste des API que les guests peuvent appeler sans authentification
+        return endpoint.startsWith("/sessions/{sessionCode}/answer") || endpoint.startsWith("/guest"); 
+    }
+
 }

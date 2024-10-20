@@ -2,7 +2,12 @@
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL UNIQUE,
-    score INT DEFAULT 0
+    password VARCHAR(255), -- Nullable pour les utilisateurs sans mot de passe
+    is_admin BOOLEAN DEFAULT FALSE,
+    is_guest BOOLEAN DEFAULT FALSE, -- Marqueur pour les utilisateurs invités
+    score INT DEFAULT 0,
+    ready BOOLEAN DEFAULT FALSE,
+    created_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Création de la table des musiques
@@ -20,6 +25,7 @@ CREATE TABLE session (
     name VARCHAR(255) NOT NULL,
     current_music_index INT DEFAULT 0,
     status VARCHAR(255) DEFAULT 'waiting',
+    session_code VARCHAR(10) NOT NULL, -- Ajout de la colonne session_code
     admin_id INT NOT NULL,
     start_time TIMESTAMP,
     end_time TIMESTAMP,
@@ -50,7 +56,7 @@ CREATE TABLE answers (
     answer_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (music_id) REFERENCES music(id) ON DELETE CASCADE,
-    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
+    FOREIGN KEY (session_id) REFERENCES session(id) ON DELETE CASCADE,
     UNIQUE (user_id, session_id, music_id) -- Assure qu'une réponse par utilisateur et par tour
 );
 
@@ -59,7 +65,7 @@ CREATE TABLE session_music (
     session_id INT NOT NULL,
     music_id INT NOT NULL,
     PRIMARY KEY (session_id, music_id),
-    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
+    FOREIGN KEY (session_id) REFERENCES session(id) ON DELETE CASCADE,
     FOREIGN KEY (music_id) REFERENCES music(id) ON DELETE CASCADE
 );
 
@@ -86,11 +92,5 @@ CREATE TABLE leaderboard (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
--- Ajout de la colonne created_time pour la table users
-ALTER TABLE users ADD COLUMN created_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
 
--- Ajout des colonnes start_time et end_time pour la table sessions
-ALTER TABLE users ADD COLUMN password VARCHAR(255) NOT NULL;
-ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT FALSE;
-
-ALTER TABLE users ADD COLUMN ready BOOLEAN DEFAULT FALSE;
+CREATE INDEX idx_session_code ON session(session_code);

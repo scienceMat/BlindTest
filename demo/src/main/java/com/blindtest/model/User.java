@@ -25,7 +25,11 @@ public class User {
     
     private String password;
     
+    @Column(nullable = false)
     private boolean isAdmin;
+
+    @Column
+    private boolean isGuest;
 
     private boolean ready;
 

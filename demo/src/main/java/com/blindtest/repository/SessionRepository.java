@@ -6,10 +6,12 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
+import java.util.Optional;
 
 import com.blindtest.model.User;
 import java.util.List;
 public interface SessionRepository extends JpaRepository<Session, Long> {
+    Optional<Session> findBySessionCode(String sessionCode);
 
     @Query("SELECT s FROM Session s WHERE :user MEMBER OF s.users")
     List<Session> findFirstSessionByUser(@Param("user") User user);

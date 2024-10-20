@@ -66,7 +66,8 @@ public class Mapper {
         sessionDTO.setName(session.getName());
         sessionDTO.setAdminId(session.getAdmin().getId());
         sessionDTO.setUsers(session.getUsers().stream().map(Mapper::toUserDTO).collect(Collectors.toList()));
-        
+        sessionDTO.setSessionCode(session.getSessionCode()); // Assigner le sessionCode
+
         // Vérification si la liste de musiques n'est pas nulle avant de la mapper
         if (session.getMusics() != null) {
             sessionDTO.setMusicList(session.getMusics().stream().map(Mapper::toMusicDTO).collect(Collectors.toList()));

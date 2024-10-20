@@ -12,6 +12,7 @@ public class SessionDTO {
     private List<MusicDTO> musicList;
     private int currentMusicIndex;
     private String status;
+    private String sessionCode;
     private LocalDateTime startTime;
     private LocalDateTime endTime;
     private LocalDateTime questionStartTime;
@@ -21,6 +22,14 @@ public class SessionDTO {
     // Getters and Setters
     public Long getId() {
         return id;
+    }
+
+    public String getSessionCode() {
+        return sessionCode;
+    }
+
+    public void setSessionCode(String sessionCode) {
+        this.sessionCode = sessionCode;
     }
 
     public void setId(Long id) {

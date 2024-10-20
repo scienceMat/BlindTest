@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.stream.Collectors;
+import java.util.Optional;
 
 @Service
 public class UserService implements UserDetailsService {
@@ -40,13 +41,21 @@ public class UserService implements UserDetailsService {
         return users.stream().map(Mapper::toUserDTO).collect(Collectors.toList());
     }
 
+    
+
     @Transactional
-    public UserDTO createUser(String userName, String password, boolean isAdmin) {
-        User user = new User();
-        user.setName(userName);
-        user.setPassword(passwordEncoder.encode(password));
-        user.setAdmin(isAdmin);
-        userRepository.save(user);
+    public UserDTO findOrCreateUser(String userName, String password, boolean isAdmin) {
+        Optional<User> existingUserOpt = userRepository.findByName(userName);
+        User user;
+        if (existingUserOpt.isPresent()) {
+            user = existingUserOpt.get();
+        } else {
+            user = new User();
+            user.setName(userName);
+            user.setAdmin(isAdmin);
+            user.setPassword(passwordEncoder.encode(password)); // Encode the password
+            userRepository.save(user);
+        }
         return Mapper.toUserDTO(user);
     }
 

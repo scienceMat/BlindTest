@@ -32,6 +32,10 @@ public class Session {
     @JoinColumn(name = "admin_id", nullable = false)
     private User admin;
 
+    // Ajouter un champ pour le code de session
+    @Column
+    private String sessionCode;
+
     @Column
     private LocalDateTime startTime;
 
@@ -125,4 +129,13 @@ public class Session {
     public int hashCode() {
         return Objects.hash(id);
     }
+
+    public String getSessionCode() {
+        return sessionCode;
+    }
+
+    public void setSessionCode(String sessionCode) {
+        this.sessionCode = sessionCode;
+    }
+
 }

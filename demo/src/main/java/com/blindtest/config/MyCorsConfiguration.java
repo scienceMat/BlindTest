@@ -13,10 +13,8 @@ public class MyCorsConfiguration {
     public CorsFilter corsFilter() {
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         CorsConfiguration config = new CorsConfiguration();
-        
-        // Configure CORS
         config.setAllowCredentials(true);
-        config.addAllowedOrigin("http://localhost:4200"); // Autorise http://localhost:4200
+        config.addAllowedOrigin("http://localhost:4200"); // Autorise le front Angular
         config.addAllowedHeader("*");
         config.addAllowedMethod("*");
         

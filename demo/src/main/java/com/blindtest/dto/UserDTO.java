@@ -8,8 +8,26 @@ public class UserDTO {
     private String password;
     @JsonProperty("isAdmin")
     private boolean isAdmin;
+    @JsonProperty("isGuest")
+    private boolean isGuest;
     private int score;
     private boolean ready; // Ajout de la propriété ready
+
+    public void setAdmin(boolean isAdmin) {
+        this.isAdmin = isAdmin;
+    }
+
+    public void setisGuest(boolean isGuest) {
+        this.isGuest = isGuest;
+    }
+
+    public boolean isGuest() {
+        return isGuest;
+    }
+
+    public void setGuest(boolean isGuest) {
+        this.isGuest = isGuest;
+    }
 
     // Getters and Setters
     public Long getId() {

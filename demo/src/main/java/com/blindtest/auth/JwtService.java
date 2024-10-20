@@ -44,20 +44,43 @@ this.jwtExpiration = jwtExpiration;
         return null;
     }
 
-     public String generateToken(UserDTO userDTO) {
+    public String generateToken(UserDTO userDTO) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("id", userDTO.getId());
         claims.put("isAdmin", userDTO.getIsAdmin());
+        claims.put("isGuest", userDTO.isGuest());
+        claims.put("userName", userDTO.getUserName());
         return buildToken(claims, userDTO.getUserName(), jwtExpiration);
     }
 
     // Méthode pour résoudre les claims JWT du token
     public Claims resolveClaims(HttpServletRequest req) {
         try {
+            // Récupérer le token JWT si disponible
             String token = resolveToken(req);
+    
+            // Vérifie si un token est présent
             if (token != null) {
-                return extractAllClaims(token);
+                Claims claims = extractAllClaims(token);
+    
+                // Si c'est un utilisateur guest (isGuest est vrai)
+                Boolean isGuest = claims.get("isGuest", Boolean.class);
+                if (isGuest != null && isGuest) {
+                    String guestUserName = claims.get("userName", String.class);
+                    if (guestUserName != null) {
+                        // Accès pour l'utilisateur guest
+                        System.out.println("Guest user detected: " + guestUserName);
+                        return claims; // Ne pas bloquer l'accès pour un guest
+                    }
+                }
+    
+                // Si c'est un utilisateur normal, on valide le token
+                if (claims != null && validateClaims(claims)) {
+                    return claims;
+                }
             }
+    
+            // Retourne null si aucun token ou token invalide
             return null;
         } catch (ExpiredJwtException ex) {
             req.setAttribute("expired", ex.getMessage());

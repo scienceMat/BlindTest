@@ -32,22 +32,22 @@ public class UserController {
 
     @PostMapping("/create")
     public ResponseEntity<UserDTO> createUser(@RequestBody UserDTO userDTO) {
-        UserDTO createdUser = userService.createUser(userDTO.getUserName(), userDTO.getPassword(), userDTO.getIsAdmin());
+        UserDTO createdUser = userService.findOrCreateUser(userDTO.getUserName(), userDTO.getPassword(), userDTO.getIsAdmin());
         return ResponseEntity.ok(createdUser);
     }
 
     @PostMapping("/login")
-public ResponseEntity<?> authenticateUser(@RequestBody LoginRequest loginRequest) {
-    Authentication authentication = authenticationManager.authenticate(
-            new UsernamePasswordAuthenticationToken(loginRequest.getUserName(), loginRequest.getPassword()));
+    public ResponseEntity<?> authenticateUser(@RequestBody LoginRequest loginRequest) {
+        Authentication authentication = authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(loginRequest.getUserName(), loginRequest.getPassword()));
 
-    SecurityContextHolder.getContext().setAuthentication(authentication);
+        SecurityContextHolder.getContext().setAuthentication(authentication);
 
-    UserDTO userDTO = userService.getUserByUsername(loginRequest.getUserName());
-    String jwt = jwtService.generateToken(userDTO);
+        UserDTO userDTO = userService.getUserByUsername(loginRequest.getUserName());
+        String jwt = jwtService.generateToken(userDTO);
 
-    return ResponseEntity.ok(new JwtResponse(jwt, userDTO.getId(), userDTO.getUserName(), userDTO.getIsAdmin()));
-}
+        return ResponseEntity.ok(new JwtResponse(jwt, userDTO.getId(), userDTO.getUserName(), userDTO.getIsAdmin()));
+    }
 
     @GetMapping("/{id}")
     public ResponseEntity<UserDTO> getUserById(@PathVariable Long id) {

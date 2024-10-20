@@ -48,9 +48,15 @@ public class SessionController {
         return sessionService.createSession(sessionDTO.getName(), sessionDTO.getAdminId());
     }
 
-    @PostMapping("/{sessionId}/join")
-    public SessionDTO joinSession(@PathVariable Long sessionId, @RequestBody UserDTO userDTO) {
-        return sessionService.joinSession(sessionId, userDTO.getId());
+    @PostMapping("/{sessionCode}/join")
+    public SessionDTO joinSessionByCode(@PathVariable String sessionCode, @RequestBody UserDTO userDTO) {
+        return sessionService.joinSessionByCode(sessionCode, userDTO.getId());
+    }
+
+    @PostMapping("/{sessionCode}/join-as-guest")
+    public SessionDTO joinSessionAsGuest(@PathVariable String sessionCode, @RequestBody String userName) {
+        UserDTO guestUser = sessionService.createGuestUser(userName);
+        return sessionService.joinSessionByCode(sessionCode, guestUser.getId());
     }
 
     @PostMapping("/{sessionId}/leave")
@@ -82,7 +88,10 @@ public class SessionController {
 
     @PostMapping("/{sessionId}/answer")
     public SessionDTO submitAnswer(@PathVariable Long sessionId, @RequestBody AnswerRequest answerRequest) {
-        return sessionService.submitAnswer(sessionId, answerRequest.getUserId(), answerRequest.getTitle(), answerRequest.getArtist());
+        if (answerRequest.getUserName() == null || answerRequest.getUserName().isEmpty()) {
+            throw new IllegalArgumentException("Invalid userName: userName is required");
+        }
+        return sessionService.submitAnswer(sessionId,  answerRequest.getUserName(), answerRequest.getTitle(), answerRequest.getArtist());
     }
 
     @GetMapping("/{sessionId}/current-music-index")
@@ -119,6 +128,12 @@ public class SessionController {
     @GetMapping("/{sessionId}")
     public ResponseEntity<SessionDTO> getSession(@PathVariable Long sessionId) {
         SessionDTO sessionDTO = sessionService.getSession(sessionId);
+        return ResponseEntity.ok(sessionDTO);
+    }
+
+    @GetMapping("/code/{sessionCode}")
+    public ResponseEntity<SessionDTO> getSessionByCode(@PathVariable String sessionCode) {
+        SessionDTO sessionDTO = sessionService.getSessionByCode(sessionCode);
         return ResponseEntity.ok(sessionDTO);
     }
 
