@@ -13,9 +13,14 @@ import com.blindtest.repository.AnswerRepository;
 import com.blindtest.repository.MusicRepository;
 import com.blindtest.repository.SessionRepository;
 import com.blindtest.repository.UserRepository;
-
+import java.util.Date;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -25,15 +30,22 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.Optional;
+import java.util.TimerTask;
 import java.util.UUID;
 @Service
 public class SessionService {
     private final Logger logger = LoggerFactory.getLogger(SessionService.class);
+    private final TaskScheduler taskScheduler;
+
+    public SessionService(TaskScheduler taskScheduler) {
+        this.taskScheduler = taskScheduler;
+    }
 
     @Autowired
     private SessionRepository sessionRepository;
@@ -121,7 +133,9 @@ public class SessionService {
 
         if (!session.getUsers().contains(user)) {
             session.getUsers().add(user);
+            session.getScores().put(user, 0);  // Initialiser le score à 0
             user.getSessions().add(session);  // Assurer la cohérence bidirectionnelle
+            
             sessionRepository.save(session);
         }
 
@@ -197,12 +211,60 @@ public class SessionService {
             .collect(Collectors.toList());
     }
 
+    @Transactional
+    public void finalizeRound(Session session) {
+        if (session.isRoundActive()) {
+            // Marquer le round comme terminé
+            session.endRound();  
+            sessionRepository.save(session);
+
+            // Notifier la fin du round
+            notifyEndOfRound(session);  
+
+            // Planifier le prochain round après 5 secondes
+            Instant startTime = Instant.now().plusSeconds(5);  // Délai de 5 secondes
+            taskScheduler.schedule(() -> nextRound(session), startTime);
+        } else {
+            logger.warn("Round already finalized for session: " + session.getId());
+        }
+    }
+
+    @Transactional
+    public void nextRound(Session session) {
+        if (session.getCurrentRound() < session.getMusicList().size()) {
+        
+            // Incrémenter l'index de la musique actuelle
+            int currentMusicIndex = session.getCurrentMusicIndex();
+            if (currentMusicIndex < session.getMusicList().size() - 1) {
+                session.setCurrentMusicIndex(currentMusicIndex + 1);
+            } else {
+                // Si on a atteint la fin de la playlist, on retourne au début
+                session.setCurrentMusicIndex(0);
+            }
+        
+            session.nextRound();  
+            session.setRoundActive(true);
+            session.setQuestionStartTime(LocalDateTime.now());
+            sessionRepository.save(session);
+
+            // Notifier le frontend pour démarrer le prochain round
+            notifyNextRound(session);
+        } else {
+            // Si tous les rounds sont terminés, terminer la session
+            finalizeSession(session);  
+        }
+    }
+
 
     @Transactional
     public synchronized SessionDTO submitAnswer(Long sessionId, String userName, String title, String artist) {
         Session session = sessionRepository.findById(sessionId)
             .orElseThrow(() -> new RuntimeException("Session not found"));
-    
+
+            if (!session.isRoundActive()) {
+                throw new RuntimeException("The current round is already finished.");
+            }
+
             if (userName == null || userName.isEmpty()) {
                 logger.error("Invalid userName received: {}", userName);
                 throw new IllegalArgumentException("Invalid userName");
@@ -257,17 +319,15 @@ public class SessionService {
     
         // Vérifier si tous les joueurs ont répondu pour terminer le round
         if (checkIfAllPlayersAnswered(session)) {
-            notifyEndOfRound(session);
             pauseMusic(session);
-    
+            finalizeRound(session);
+
             // Attendre une courte durée avant de passer à la musique suivante
             try {
                 Thread.sleep(5000); // Pause de 5 secondes
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
-    
-            nextMusic(session);
         }
     
         // Retourner la session avec les scores mis à jour
@@ -280,26 +340,39 @@ public class SessionService {
         messagingTemplate.convertAndSend("/topic/session/" + session.getId(), "PAUSE_MUSIC");
     }
 
-    // Notifier la fin du round à tous les utilisateurs
+
+    public void nextMusic(Session session) {
+        if (session.getCurrentMusicIndex() < session.getMusicList().size() - 1) {
+            session.setCurrentMusicIndex(session.getCurrentMusicIndex() + 1);
+    
+            session.setQuestionStartTime(LocalDateTime.now());
+            session.nextRound();  // Activer le nouveau round
+
+            sessionRepository.save(session);
+    
+            notifyNextRound(session);  // Envoyer un message WebSocket pour informer du début du prochain round
+        } else {
+            finalizeSession(session);  // Si toutes les musiques sont jouées, terminer la session
+        }
+    }
+
     @Transactional
     public void notifyEndOfRound(Session session) {
         messagingTemplate.convertAndSend("/topic/session/" + session.getId(), "END_OF_ROUND");
     }
 
     @Transactional
-    public void nextMusic(Session session) {
-        int nextMusicIndex = session.getCurrentMusicIndex() + 1;
+    public void notifyNextRound(Session session) {
+        messagingTemplate.convertAndSend("/topic/session/" + session.getId(), "NEXT_ROUND");
+    }
 
-        if (nextMusicIndex < session.getMusicList().size()) {
-            session.setCurrentMusicIndex(nextMusicIndex);
-            sessionRepository.save(session);
+    @Transactional
+    public void finalizeSession(Session session) {
+        session.setStatus("finished");
+        session.setEndTime(LocalDateTime.now());
+        sessionRepository.save(session);
 
-            // Notifier les utilisateurs de la nouvelle musique
-         messagingTemplate.convertAndSend("/topic/session/" + session.getId(), "NEXT_MUSIC");
-        } else {
-            // Si c'était la dernière musique, terminer la session
-            messagingTemplate.convertAndSend("/topic/session/" + session.getId(), "SESSION_FINISHED");
-        }
+        messagingTemplate.convertAndSend("/topic/session/" + session.getId(), "SESSION_FINISHED");
     }
 
     @Transactional
@@ -416,6 +489,7 @@ public class SessionService {
         session.setStartTime(LocalDateTime.now());
         session.setCurrentMusicIndex(0);
         session.setQuestionStartTime(LocalDateTime.now().plusSeconds(10)); // Start the question after 10 seconds
+        session.setRoundActive(true);
         sessionRepository.save(session);
     
         // Send start message to session-specific topic

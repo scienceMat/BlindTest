@@ -17,7 +17,8 @@ public class SessionDTO {
     private LocalDateTime endTime;
     private LocalDateTime questionStartTime;
     private MusicDTO currentMusic;
-    private Map<Long, Integer> scores; // Mapping des scores par ID utilisateur
+    private Map<Long, Integer> scores;
+    private Number round; // Mapping des scores par ID utilisateur
 
     // Getters and Setters
     public Long getId() {
@@ -122,5 +123,13 @@ public class SessionDTO {
 
     public void setScores(Map<Long, Integer> scores) {
         this.scores = scores;
+    }
+
+    public Number getRound() {
+        return round;
+    }
+
+    public void setRound(Number round) {
+        this.round = round;
     }
 }

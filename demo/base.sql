@@ -94,3 +94,7 @@ CREATE TABLE leaderboard (
 
 
 CREATE INDEX idx_session_code ON session(session_code);
+
+
+ALTER TABLE session ADD COLUMN current_round INT DEFAULT 1;
+ALTER TABLE session ADD COLUMN round_active BOOLEAN DEFAULT false;

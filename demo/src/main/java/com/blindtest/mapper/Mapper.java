@@ -81,7 +81,8 @@ public class Mapper {
         } else {
             sessionDTO.setScores(null);
         }
-
+        
+        sessionDTO.setRound(session.getCurrentRound());
         sessionDTO.setCurrentMusicIndex(session.getCurrentMusicIndex());
         sessionDTO.setStatus(session.getStatus());
         sessionDTO.setStartTime(session.getStartTime());

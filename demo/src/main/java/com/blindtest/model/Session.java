@@ -2,6 +2,7 @@ package com.blindtest.model;
 
 import jakarta.persistence.*;
 import lombok.Data;
+import lombok.ToString;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -42,6 +43,14 @@ public class Session {
     @Column
     private LocalDateTime endTime;
 
+    @Column(nullable = false)
+    private int currentRound = 1;  
+
+    @Column(nullable = false)
+    private boolean roundActive = false;  // Round actif ou non
+
+
+
     @Column
     private LocalDateTime questionStartTime;
 
@@ -53,6 +62,7 @@ public class Session {
     private List<User> users = new ArrayList<>();
 
     @OneToMany(mappedBy = "session", cascade = CascadeType.ALL, orphanRemoval = true)
+    @ToString.Exclude
     private Set<Answer> answers;
 
     @ManyToMany(fetch = FetchType.EAGER, cascade = {CascadeType.PERSIST, CascadeType.MERGE, CascadeType.REMOVE})
@@ -85,6 +95,19 @@ public class Session {
         } else {
             this.musicList = new ArrayList<>();
         }
+    }
+
+    public void nextRound() {
+        this.currentRound++;
+        this.roundActive = true;  // Réactiver le round
+    }
+
+    public void endRound() {
+        this.roundActive = false;  // Marquer le round comme terminé
+    }
+
+    public int getCurrentRound() {
+        return currentRound;
     }
 
     public void setUsers(List<User> userList) {
